@@ -1,6 +1,7 @@
 import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
 import matplotlib.pyplot as plt
+import pickle
 
 
 class CredFlow(object):
@@ -21,7 +22,7 @@ class CredFlow(object):
 
     def oneHitWonderChecker(self, artist, views_lim=0.5):
         query = self.spotify_obj.search("artist:" + artist, type="artist")
-        items = query['artists']['items']
+        items = query["artists"]["items"]
         if len(items) > 0:
             artist = items[0]
             followers = artist["followers"]["total"]
@@ -59,12 +60,12 @@ class CredFlow(object):
         # extra steps necessary because request limit for the method is 100
 
         results = self.spotify_obj.playlist_items(playlist_id)
-        tracks = results['items']
+        tracks = results["items"]
         track_info = {}
 
-        while results['next']:
+        while results["next"]:
             results = self.spotify_obj.next(results)
-            tracks.extend(results['items'])
+            tracks.extend(results["items"])
 
         for x in range(results["total"]):
             track_info[tracks[x]["track"]["name"]] = tracks[x]["track"]["id"]
@@ -94,6 +95,80 @@ class CredFlow(object):
 
         patches, texts = plt.pie(sizes, shadow=True, startangle=90)
         plt.legend(patches, labels, loc="best")
-        plt.axis('equal')
+        plt.axis("equal")
         plt.tight_layout()
         plt.show()
+
+    def writeCategories(self):
+        response = self.spotify_obj.categories(limit=50)
+        categories = {}
+        for item in response["categories"]["items"]:
+            categories[item["name"]] = item["id"]
+            print(categories[item["name"]] + " =  " + item["id"])
+
+        with open("SpotifyData/categories.pickle", "wb") as file:
+            pickle.dump(categories, file)
+
+    def exploreCategory(self, category):
+        with open("SpotifyData/categories.pickle", "rb") as file:
+            categories = pickle.load(file)
+            category_id = categories[category]
+
+        category_info = self.spotify_obj.category(category_id=category_id)
+        category_pic = category_info["icons"][0]["url"]
+
+        category_playlists_response = self.spotify_obj.category_playlists(category_id=category_id, limit=50)
+        category_playlists = {}
+
+        for playlist in category_playlists_response["playlists"]["items"]:
+            category_playlists[playlist["name"]] = playlist["id"]
+
+        return [category_pic, category_playlists]
+
+    def writeRecommendations(self):
+        recommendations_response = self.spotify_obj.recommendation_genre_seeds()
+        recommendations_list = []
+        for genre in recommendations_response["genres"]:
+            recommendations_list.append(genre)
+
+        with open("SpotifyData/recommendation_seeds.pickle", "wb") as file:
+            pickle.dump(recommendations_list, file)
+
+    def generateRecommendations(self, seeds, seed_type="genre"):
+        with open("SpotifyData/recommendation_seeds.pickle", "rb") as file:
+            recommendations_list = pickle.load(file)
+
+        if seed_type == "genre" and seed_type not in recommendations_list:
+            raise ValueError("This genre is not accepted by the Spotify API")
+
+        tracks = []
+        if seed_type == "genre":
+            tracks = self.spotify_obj.recommendations(seed_genres=seeds, limit=20)
+
+        elif seed_type == "artist":
+            id_seeds = []
+            for seed in seeds:
+                query = self.spotify_obj.search("artist:" + seed, type="artist")
+                items = query["artists"]["items"]
+                if len(items) > 0:
+                    id_seeds.append(items[0]["id"])
+            tracks = self.spotify_obj.recommendations(seed_artists=id_seeds, limit=20)
+
+        else:
+            id_seeds = []
+            for seed in seeds:
+                query = self.spotify_obj.search(seed, type="track")
+                id_seeds.append(query["tracks"]["items"][0]["id"])
+            tracks = self.spotify_obj.recommendations(seed_tracks=id_seeds, limit=20)
+
+        recommended_tracks = []
+        for track in tracks["tracks"]:
+            artists = [artist["name"] for artist in track["artists"]]
+            strArtists = ""
+            for artist in artists:
+                strArtists += str(artist) + " "
+
+            track_info = {"artist": strArtists, "name": track["name"], "id": track["id"], "image": track["album"]["images"][0]}
+            recommended_tracks.append(track_info)
+
+        return recommended_tracks

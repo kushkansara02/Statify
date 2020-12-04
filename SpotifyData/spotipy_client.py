@@ -2,6 +2,7 @@ import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 
 
+# authorization code flow
 class SpotipyClient(object):
     # class properties
     username = None
