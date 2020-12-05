@@ -172,3 +172,13 @@ class CredFlow(object):
             recommended_tracks.append(track_info)
 
         return recommended_tracks
+
+    def audioFeatures(self, tracks):
+        tracks_features = []
+        for track in tracks:
+            query = self.spotify_obj.search(track, type="track")
+            track_id = query["tracks"]["items"][0]["id"]
+            features = self.spotify_obj.audio_features([track_id])[0]
+            features["name"] = track
+            tracks_features.append(features)
+        return tracks_features
